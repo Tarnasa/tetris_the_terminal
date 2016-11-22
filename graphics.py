@@ -33,6 +33,18 @@ class Screen(object):
     def draw(self, xoff=0, yoff=0):
         sys.stdout.write(self.get_string(xoff, yoff))
 
+    def paint_border(self):
+        mx = self.width-1
+        my = self.height-1
+        for y in range(self.height):
+            self.pixels[y][0] = Pixel('|', 7, 0)
+            self.pixels[y][mx] = Pixel('|', 7, 0)
+        for x in range(self.width):
+            self.pixels[0][x] = Pixel('=', 7, 0)
+            self.pixels[my][x] = Pixel('=', 7, 0)
+        for x, y in [(0, 0), (mx, 0), (0, my), (mx, my)]:
+            self.pixels[y][x] = Pixel('#', 7, 0)
+
 
 
 def SGR(code):

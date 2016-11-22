@@ -5,6 +5,7 @@
 # ARE = 30
 # TODO: Scoring
 # TODO: Use TGM randomizer with history = 4
+# TODO: Hidden lines
 
 import random
 from bisect import bisect_left
@@ -39,7 +40,7 @@ for y, line in enumerate(lines):
 
 
 class Game(object):
-    def __init__(self):
+    def __init__(self, random_seed=None):
         self.width = 10
         self.height = 22
         self.hidden_rows = 2  # Don't show t
@@ -49,21 +50,19 @@ class Game(object):
         self.current = None
         self.blocks = [[0] * self.width for _ in range(self.height)]
         self.screen = Screen(self.width*2+2, self.height+2)
+        self.next_screen = Screen(11, 6)
         self.next_tetrominos = []
-        self.paint_border()
+        self.paint_borders()
+        self.current_frame = 0
         self.level = 0
+        self.random_seed = random_seed
+        self.random = random.Random()
+        if random_seed is not None:
+            self.random.seed(random_seed)
 
-    def paint_border(self):
-        mx = self.width*2+1
-        my = self.height+1
-        for y in range(self.height+2):
-            self.screen.pixels[y][0] = Pixel('|', 7, 0)
-            self.screen.pixels[y][mx] = Pixel('|', 7, 0)
-        for x in range(self.width*2+2):
-            self.screen.pixels[0][x] = Pixel('=', 7, 0)
-            self.screen.pixels[my][x] = Pixel('=', 7, 0)
-        for x, y in [(0, 0), (mx, 0), (0, my), (mx, my)]:
-            self.screen.pixels[y][x] = Pixel('#', 7, 0)
+    def paint_borders(self):
+        self.screen.paint_border()
+        self.next_screen.paint_border()
 
     @property
     def gravity(self):
@@ -71,13 +70,20 @@ class Game(object):
         return GRAVITY_TABLE[pos-1][1]
 
     def start(self):
-        self.next_tetrominos = [random.choice('IJLT')]  # "To avoid a forced overhang"
+        self.next_tetrominos = [self.random.choice('IJLT')]  # "To avoid a forced overhang"
         self.spawn_next()
 
     def next_tetromino(self):
-        if not self.next_tetrominos:
-            self.next_tetrominos = list(ALL_PIECES)
-            random.shuffle(self.next_tetrominos)
+        if not self.next_tetrominos or len(self.next_tetrominos) <= 1:
+            to_shuffle = list(ALL_PIECES)
+            self.random.shuffle(to_shuffle)
+            self.next_tetrominos = to_shuffle + self.next_tetrominos
+        old = self.next_tetrominos[-1]
+        old = Tetromino(old, x=(old!='I'))
+        new = self.next_tetrominos[-2]
+        new = Tetromino(new, x=(new!='I'))
+        self.unpaint_piece_to(old, self.next_screen)
+        self.paint_piece_to(new, self.next_screen)
         return self.next_tetrominos.pop()
 
     def next_frame(self):
@@ -93,6 +99,7 @@ class Game(object):
                 self.reset_lock_delay()
         else:
             self.reset_lock_delay()
+        self.current_frame += 1
 
     def spawn_next(self):
         next_name = self.next_tetromino()
@@ -144,16 +151,30 @@ class Game(object):
                 return True
         return False
 
+    def unpaint_piece_to(self, t, screen):
+        for x, y in t.yield_occupied():
+            screen.pixels[y+1][x*2+1] = Pixel(' ', 7, 0)
+            screen.pixels[y+1][x*2+2] = Pixel(' ', 7, 0)
+
+    def paint_piece_to(self, t, screen):
+        for x, y in t.yield_occupied():
+            screen.pixels[y+1][x*2+1] = Pixel(' ', 7, t.color)
+            screen.pixels[y+1][x*2+2] = Pixel(' ', 7, t.color)
+
     def unpaint_piece(self):
-        for x, y in self.current.yield_occupied():
-            self.screen.pixels[y+1][x*2+1] = Pixel(' ', 7, 0)
-            self.screen.pixels[y+1][x*2+2] = Pixel(' ', 7, 0)
+        self.unpaint_piece_to(self.current, self.screen)
 
     def paint_piece(self):
-        c = self.current.color
-        for x, y in self.current.yield_occupied():
-            self.screen.pixels[y+1][x*2+1] = Pixel(' ', 7, c)
-            self.screen.pixels[y+1][x*2+2] = Pixel(' ', 7, c)
+        self.paint_piece_to(self.current, self.screen)
+
+    def user_command(self, command_name):
+        {
+                'L': self.user_left,
+                'R': self.user_right,
+                'D': self.user_down,
+                'W': self.clockwise,
+                'C': self.counterclockwise,
+        }[command_name]()
 
     def user_left(self):
         if not self.collides(xd=-1):
@@ -225,7 +246,6 @@ class Game(object):
     def draw(self, xoff=0, yoff=0):
         self.screen.draw(xoff, yoff)
 
-
-
-
+    def draw_next_piece(self, xoff=0, yoff=0):
+        self.next_screen.draw(xoff, yoff)
 
